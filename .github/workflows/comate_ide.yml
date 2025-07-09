@@ -1,0 +1,60 @@
+name: Comate IDE
+
+on:
+  workflow_dispatch:
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Fetch all tags
+        run: git fetch --tags
+
+      - name: Get latest tag and set next tag
+        id: version
+        run: |
+          latest_tag=$(git tag --list "v1.*" --sort=-v:refname | head -n 1)
+          if [ -z "$latest_tag" ]; then
+            next_tag="v1.0.0"
+          else
+            IFS='.' read -r major minor patch <<<"${latest_tag#v}"
+            patch=$((patch + 1))
+            next_tag="v${major}.${minor}.${patch}"
+          fi
+          echo "Next tag: $next_tag"
+          echo "TAG_NAME=$next_tag" >> $GITHUB_ENV
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+
+      - name: Create and push Git tag
+        run: |
+          git tag $TAG_NAME
+          git push origin $TAG_NAME
+
+      - name: Download Comate Installer
+        run: |
+          curl -L -o Comate-win32-x64-user-setup.exe \
+          https://comate-ide.cdn.bcebos.com/download/stable/061175c7dcb96b30737e1b29af40646d947fb137/Comate-win32-x64-user-setup.exe
+
+      - name: Upload as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Comate-win32-x64-user-setup
+          path: Comate-win32-x64-user-setup.exe
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG_NAME }}
+          files: Comate-win32-x64-user-setup.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
